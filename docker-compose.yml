@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: ./Backend
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - JWT_SECRET=prefeitura_secret_2024
+      - DB_PATH=/app/db/prefeitura.db
+    volumes:
+      - db_data:/app/db
+
+  frontend:
+    build:
+      context: ./Frontend
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:

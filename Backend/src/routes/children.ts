@@ -1,8 +1,17 @@
 import { Response, Router } from 'express';
+import { z } from 'zod';
 import db from '../db/database';
 import { AuthRequest, requireAuth } from '../middleware/auth';
 
 const router = Router();
+
+const listQuerySchema = z.object({
+  bairro: z.string().optional(),
+  com_alertas: z.enum(['true', 'false']).optional(),
+  revisado: z.enum(['true', 'false']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+});
 
 type ChildRow = {
   id: string;
@@ -29,7 +38,20 @@ function parseChild(row: ChildRow) {
 }
 
 router.get('/', (req: AuthRequest, res: Response) => {
-  const { bairro, com_alertas, revisado, page = '1', limit = '10' } = req.query;
+  const result = listQuerySchema.safeParse(req.query);
+
+  if (!result.success) {
+    res.status(400).json({
+      error: 'Parâmetros inválidos',
+      issues: result.error.issues.map(i => ({
+        field: i.path.join('.'),
+        message: i.message,
+      })),
+    });
+    return;
+  }
+
+  const { bairro, com_alertas, revisado, page, limit } = result.data;
 
   let rows = (db.prepare('SELECT * FROM children').all() as ChildRow[]).map(parseChild);
 
@@ -49,18 +71,16 @@ router.get('/', (req: AuthRequest, res: Response) => {
   }
 
   const total = rows.length;
-  const pageNum = Math.max(1, parseInt(page as string));
-  const limitNum = Math.max(1, parseInt(limit as string));
-  const start = (pageNum - 1) * limitNum;
-  const data = rows.slice(start, start + limitNum);
+  const start = (page - 1) * limit;
+  const data = rows.slice(start, start + limit);
 
   res.json({
     data,
     pagination: {
       total,
-      page: pageNum,
-      limit: limitNum,
-      pages: Math.ceil(total / limitNum),
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
     },
   });
 });
